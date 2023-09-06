@@ -3,10 +3,10 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 var requestID int //this variable is used to keep track of each request
@@ -18,7 +18,6 @@ var TasksTracker = map[int]*Task{}
 type Task struct {
 	Id   int    `json:"id"`
 	Desc string `json:"desc"`
-	Time time.Time
 }
 
 // UpdateTask is used to unmrashall all jsons sent to PATCH tasks
@@ -44,6 +43,14 @@ func main() {
 
 	webApp.Get("/", About)
 
+	//Returns all tasks
+	webApp.Get("/tasks/all", func(ctx *fiber.Ctx) error {
+		if len(TasksTracker) == 0 {
+			ctx.Status(fiber.StatusOK).SendString("There are currently no tasks at all!")
+		}
+		return ctx.Status(fiber.StatusOK).JSON(TasksTracker)
+	})
+
 	//func that returns specific task
 	webApp.Get("/tasks/:id", func(ctx *fiber.Ctx) error {
 		requestID++
@@ -51,7 +58,7 @@ func main() {
 		id, err := strconv.Atoi(param)
 		if err != nil {
 			logrus.Infof("Error while converting string to int in request number %d", requestID)
-			return ctx.Status(fiber.StatusConflict).SendString(fmt.Sprintf("Error:%v", err))
+			return ctx.Status(fiber.StatusConflict).SendString(fmt.Sprintf(`Invalid id "%s"`, param))
 		}
 		logrus.Infof("Succesfull request number %d", requestID)
 		return ctx.Status(fiber.StatusOK).JSON(TasksTracker[id])
@@ -92,6 +99,19 @@ func main() {
 		logrus.Infof("Updated task number %d with request %d", id, requestID)
 		return ctx.Status(fiber.StatusOK).SendString(fmt.Sprintf(`Updated your task from "%s" to "%s"`, old, TasksTracker[id].Desc))
 
+	})
+	//DELETE a task by id
+	webApp.Delete("/tasks/:id", func(ctx *fiber.Ctx) error {
+		requestID++
+		param := ctx.Params("id")
+		id, err := strconv.Atoi(param)
+		if err != nil {
+			logrus.Infof("Error while converting string to int in request number %d", requestID)
+		}
+		delete(TasksTracker, id)
+		logrus.Infof("Deleted task number %d", id)
+
+		return ctx.Status(fiber.StatusOK).SendString(fmt.Sprintf("Deleted task number %d", id))
 	})
 
 	logrus.Fatal(webApp.Listen(":8080"))
