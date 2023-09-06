@@ -12,7 +12,8 @@ import (
 var requestID int //this variable is used to keep track of each request
 // in case something goes bad we can track it in our server logs
 
-var TasksTracker map[int]Task
+//TasksTracker is a storage for our tasks
+var TasksTracker = map[int]Task{}
 
 type Task struct {
 	Id   int    `json:"id"`
@@ -53,6 +54,7 @@ func main() {
 
 	//POSTS a new task
 	webApp.Post("/tasks/new", func(ctx *fiber.Ctx) error {
+		requestID++
 		newTask := Task{}
 		err := ctx.BodyParser(&newTask)
 		if err != nil {
@@ -61,7 +63,7 @@ func main() {
 		}
 		//adding a new task
 		TasksTracker[newTask.Id] = newTask
-		
+		logrus.Infof("New task added: request number %d", requestID)
 		return ctx.Status(fiber.StatusOK).SendString(fmt.Sprintf("A new task created! Unique task id is:%d", newTask.Id))
 	})
 
