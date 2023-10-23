@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/sirupsen/logrus"
 )
 
@@ -41,6 +42,9 @@ func main() {
 	}
 	// start a server
 	webApp := fiber.New()
+
+	//We initiate a recover middleware
+	webApp.Use(recover.New())
 
 	webApp.Use(requestid.New())
 	webApp.Use(logger.New(logger.Config{
