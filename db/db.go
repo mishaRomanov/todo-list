@@ -5,12 +5,13 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func OpenDb() *sql.DB {
+// Opens a db
+func OpenDb() (*sql.DB, error) {
 	connStr := "user=guest password= dbname=ids sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer db.Close()
-	return db
+	return db, nil
 }

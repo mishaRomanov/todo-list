@@ -21,7 +21,7 @@ func main() {
 	log.Println(`|------------Starting a server!------------|`)
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Restored after a panic! The problem was: %v", r)
+			log.Printf("Restored after a panic! The problem was: %v\n", r)
 		}
 	}()
 
@@ -31,7 +31,10 @@ func main() {
 		ReadTimeout:  300 * time.Millisecond,
 		WriteTimeout: 300 * time.Millisecond,
 	}
-	db := database.OpenDb()
+	db, err := database.OpenDb()
+	if err != nil {
+		log.Print("Error while opening database! %v", err)
+	}
 	//create a new logger
 	var logger log.Logger
 	file, err := os.OpenFile("logs", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
