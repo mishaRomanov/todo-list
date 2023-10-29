@@ -14,7 +14,7 @@ const (
 	DBNAME   = "testdb"
 )
 
-// Opens a db
+// Opens a db and returns one and error if not nil
 func OpenDb() (*sql.DB, error) {
 	db, err := sql.Open("postgres", fmt.Sprintf("postgres://%v:%v@%v:%v/%v?sslmode=disable", USER, PASSWORD, HOST, PORT, DBNAME))
 	if err != nil {
