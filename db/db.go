@@ -2,16 +2,23 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/lib/pq"
+)
+
+const (
+	HOST     = "localhost"
+	PORT     = 5432
+	USER     = "misha"
+	PASSWORD = ""
+	DBNAME   = "testdb"
 )
 
 // Opens a db
 func OpenDb() (*sql.DB, error) {
-	connStr := "user=guest password= dbname=ids sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("postgres", fmt.Sprintf("postgres://%v:%v@%v:%v/%v?sslmode=disable", USER, PASSWORD, HOST, PORT, DBNAME))
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 	return db, nil
 }
