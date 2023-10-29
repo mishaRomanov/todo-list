@@ -12,7 +12,6 @@ import (
 
 // UpdateTask is used to unmrashall all jsons sent to PATCH tasks
 type Task struct {
-	Id   int    `json:"id"`
 	Desc string `json:"desc"`
 }
 
@@ -31,15 +30,19 @@ func main() {
 		ReadTimeout:  300 * time.Millisecond,
 		WriteTimeout: 300 * time.Millisecond,
 	}
+	//open a database
 	db, err := database.OpenDb()
 	if err != nil {
-		log.Print("Error while opening database! %v", err)
+		log.Fatalf("Error while opening database! %v\n", err)
 	}
+	defer db.Close()
+	log.Println("Database connect successful!")
+
 	//create a new logger
 	var logger log.Logger
 	file, err := os.OpenFile("logs", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		log.Print("Error while opening a file: %v", err)
+		log.Printf("Error while opening a file: %v", err)
 	}
 	//here we defer the closing of the file
 	defer file.Close()
@@ -50,7 +53,7 @@ func main() {
 
 	//Handles /about request
 	http.HandleFunc("/about", func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("New", r.Method, "request")
+		logger.Printf("%s: New %s request", time.Now().Format(time.RFC822), r.Method)
 		switch r.Method {
 		case http.MethodGet:
 			w.WriteHeader(http.StatusOK)
@@ -68,6 +71,7 @@ and monitor it by visiting /tasks`))
 		newTask := &Task{}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
+			log.Printf("%s:Error while reading the request body! %v\n", time.Now().Format(time.RFC822), err)
 			logger.Printf("Error while reading the request body! %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Internal server error"))
@@ -75,13 +79,17 @@ and monitor it by visiting /tasks`))
 		}
 		err = json.Unmarshal(body, newTask)
 		if err != nil {
+			log.Printf("%s:Error while parsing the request body! %v\n", time.Now().Format(time.RFC822), err)
 			logger.Printf("Error while parsing the request body! %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Internal server error"))
 			return
 		}
-		result, err := db.Exec("INSERT INTO tasks (id,description) VALUES", newTask.Id, newTask.Desc)
+		sqlStatement := `INSERT INTO tasks (Description)
+VALUES ($1);`
+		result, err := db.Exec(sqlStatement, newTask.Desc)
 		if err != nil {
+			log.Printf("%s:Error while inserting values into database! %v\n", time.Now().Format(time.RFC822), err)
 			logger.Printf("Error while inserting values into database! %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Internal server error"))
@@ -93,6 +101,7 @@ and monitor it by visiting /tasks`))
 	})
 
 	//here we start a server
+
 	logger.Fatal(server.ListenAndServe())
 
 }
