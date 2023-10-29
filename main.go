@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	_ "github.com/lib/pq"
 	"os"
 	"strconv"
 	"time"
@@ -16,11 +17,6 @@ import (
 // TasksTracker is a storage for our tasks
 var TasksTracker = map[int]*Task{}
 
-type Task struct {
-	Id   int    `json:"id"`
-	Desc string `json:"desc"`
-}
-
 // UpdateTask is used to unmrashall all jsons sent to PATCH tasks
 type UpdateTask struct {
 	Desc string `json:"desc"`
@@ -30,7 +26,7 @@ type UpdateTask struct {
 func About(c *fiber.Ctx) error {
 	logrus.Infof("New About request  at:%s", time.Now().Format(time.RFC822))
 	return c.SendString(`This small app is CRUD to-do list-type application.
-Send a POST-request to create a new task: /tasks/new 
+Send a POST-request to create a new task: /tasks/add 
 and monitor it by visiting /tasks`)
 }
 
