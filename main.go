@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	database "github.com/mishaRomanov/learn-fiber/db"
 	"io"
 	"log"
@@ -21,7 +20,7 @@ func main() {
 	log.Println(`|------------Starting a server!------------|`)
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered after a panic:\n", r)
+			log.Println("Recovered after a panic:\n", r)
 		}
 	}()
 
@@ -55,16 +54,10 @@ func main() {
 	//Handles /about request
 	http.HandleFunc("/about", func(w http.ResponseWriter, r *http.Request) {
 		logger.Printf("%s: New %s request", time.Now().Format(time.RFC822), r.Method)
-		switch r.Method {
-		case http.MethodGet:
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`This small app is CRUD to-do list-type application.
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`This small app is CRUD to-do list-type application.
 Send a POST-request to create a new task: /tasks/new 
 and monitor it by visiting /tasks`))
-		default:
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Method not allowed"))
-		}
 	})
 
 	//handler that adds a new task into a database
