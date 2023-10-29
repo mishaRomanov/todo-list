@@ -1,124 +1,111 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
-	_ "github.com/lib/pq"
+	database "github.com/mishaRomanov/learn-fiber/db"
+	"io"
+	"log"
+	"net/http"
 	"os"
-	"strconv"
 	"time"
-
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/sirupsen/logrus"
 )
 
-// TasksTracker is a storage for our tasks
-var TasksTracker = map[int]*Task{}
-
 // UpdateTask is used to unmrashall all jsons sent to PATCH tasks
-type UpdateTask struct {
+type Task struct {
 	Desc string `json:"desc"`
 }
 
-// About func returns information about our app
-func About(c *fiber.Ctx) error {
-	logrus.Infof("New About request  at:%s", time.Now().Format(time.RFC822))
-	return c.SendString(`This small app is CRUD to-do list-type application.
-Send a POST-request to create a new task: /tasks/add 
-and monitor it by visiting /tasks`)
-}
-
 func main() {
-	os.Create("logs.log")
-	file, err := os.OpenFile("logs.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		logrus.Fatalf("%v", err)
+
+	log.Println(`|------------Starting a server!------------|`)
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered after a panic:\n", r)
+		}
+	}()
+
+	//create a server
+	server := http.Server{
+		Addr:         ":8080",
+		ReadTimeout:  300 * time.Millisecond,
+		WriteTimeout: 300 * time.Millisecond,
 	}
-	// start a server
-	webApp := fiber.New()
+	//open a database
+	db, err := database.OpenDb()
+	if err != nil {
+		log.Fatalf("Error while opening database! %v\n", err)
+	}
+	defer db.Close()
+	log.Println("Database connect successful!")
 
-	//We initiate a recover middleware
-	webApp.Use(recover.New())
+	//create a new logger
+	var logger log.Logger
+	file, err := os.OpenFile("logs", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Printf("Error while opening a file: %v", err)
+	}
+	//here we defer the closing of the file
+	defer file.Close()
 
-	webApp.Use(requestid.New())
-	webApp.Use(logger.New(logger.Config{
-		Format: "[${locals:requestid}]: ${method} ${path} - ${status}\n",
-		Output: file,
-	}))
+	//we define the output of our logger
+	//this is very simple
+	logger.SetOutput(file)
 
-	//all handlers are stored here
-	webApp.Get("/about", About)
-
-	webApp.Get("/", About)
-
-	//Returns all tasks
-	webApp.Get("/tasks/all", func(ctx *fiber.Ctx) error {
-		if len(TasksTracker) == 0 {
-			ctx.Status(fiber.StatusOK).SendString("There are currently no tasks at all!")
+	//Handles /about request
+	http.HandleFunc("/about", func(w http.ResponseWriter, r *http.Request) {
+		logger.Printf("%s: New %s request", time.Now().Format(time.RFC822), r.Method)
+		switch r.Method {
+		case http.MethodGet:
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`This small app is CRUD to-do list-type application.
+Send a POST-request to create a new task: /tasks/new 
+and monitor it by visiting /tasks`))
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Method not allowed"))
 		}
-		return ctx.Status(fiber.StatusOK).JSON(TasksTracker)
 	})
 
-	//func that returns specific task
-	webApp.Get("/tasks/:id", func(ctx *fiber.Ctx) error {
-		param := ctx.Params("id")
-		id, err := strconv.Atoi(param)
+	//handler that adds a new task into a database
+	http.HandleFunc("/tasks/add", func(w http.ResponseWriter, r *http.Request) {
+		newTask := &Task{}
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			logrus.Infof("Error while converting string to int")
-			return ctx.Status(fiber.StatusConflict).SendString(fmt.Sprintf(`Invalid id "%s"`, param))
+			log.Printf("%s:Error while reading the request body! %v\n", time.Now().Format(time.RFC822), err)
+			logger.Printf("Error while reading the request body! %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal server error"))
+			return
 		}
-		logrus.Infof("Succesfull request")
-		return ctx.Status(fiber.StatusOK).JSON(TasksTracker[id])
-
+		err = json.Unmarshal(body, newTask)
+		if err != nil {
+			log.Printf("%s:Error while parsing the request body! %v\n", time.Now().Format(time.RFC822), err)
+			logger.Printf("Error while parsing the request body! %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal server error"))
+			return
+		}
+		if newTask.Desc == "" {
+			panic("Empty description!")
+		}
+		sqlStatement := `INSERT INTO tasks (Description)
+VALUES ($1);`
+		result, err := db.Exec(sqlStatement, newTask.Desc)
+		if err != nil {
+			log.Printf("%s:Error while inserting values into database! %v\n", time.Now().Format(time.RFC822), err)
+			logger.Printf("Error while inserting values into database! %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal server error"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Data written. New task added"))
+		log.Println(result.RowsAffected())
 	})
 
-	//POSTS a new task
-	webApp.Post("/tasks/new", func(ctx *fiber.Ctx) error {
-		newTask := Task{}
-		err := ctx.BodyParser(&newTask)
-		if err != nil {
-			logrus.Infof("Error while unmarshalling json to struct at request %v", err)
-			return ctx.Status(fiber.StatusUnprocessableEntity).SendString("Error while creating a new task!")
-		}
-		//adding a new task
-		TasksTracker[newTask.Id] = &newTask
-		logrus.Infof("New task added")
-		return ctx.Status(fiber.StatusOK).SendString(fmt.Sprintf("A new task created! Unique task id is:%d", newTask.Id))
-	})
+	//here we start a server
 
-	//PATCH already existing task
-	webApp.Patch("/tasks/:id", func(ctx *fiber.Ctx) error {
-		param := ctx.Params("id")
-		id, err := strconv.Atoi(param)
-		if err != nil {
-			logrus.Infof("Error while converting string to int")
-		}
-		new := UpdateTask{}
-		err = ctx.BodyParser(&new)
-		if err != nil {
-			logrus.Infof("Error while unmarshalling json to struct %v", err)
-		}
-		old := TasksTracker[id].Desc
+	logger.Fatal(server.ListenAndServe())
 
-		TasksTracker[id].Desc = new.Desc
-		logrus.Infof("Updated task number %d", id)
-		return ctx.Status(fiber.StatusOK).SendString(fmt.Sprintf(`Updated your task from "%s" to "%s"`, old, TasksTracker[id].Desc))
-
-	})
-	//DELETE a task by id
-	webApp.Delete("/tasks/:id", func(ctx *fiber.Ctx) error {
-		param := ctx.Params("id")
-		id, err := strconv.Atoi(param)
-		if err != nil {
-			logrus.Infof("Error while converting string to int")
-		}
-		delete(TasksTracker, id)
-		logrus.Infof("Deleted task number %d", id)
-
-		return ctx.Status(fiber.StatusOK).SendString(fmt.Sprintf("Deleted task number %d", id))
-	})
-
-	logrus.Fatal(webApp.Listen(":8080"))
 }
