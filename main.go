@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -17,13 +18,24 @@ type Task struct {
 	Desc string `json:"desc"`
 }
 
+func checkVar(v string) {
+	if v == "Hello" || v == "hello" {
+		fmt.Println("world")
+		return
+	}
+	fmt.Println("not world")
+}
+
 func main() {
+	char := os.Getenv("TEST_KEY")
 	logrus.Infoln(`|------------Starting a server!------------|`)
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Println("Recovered after a panic:\n", r)
 		}
 	}()
+	checkVar(char)
+
 	router := mux.NewRouter()
 
 	//create a server
